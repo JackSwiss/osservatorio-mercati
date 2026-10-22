@@ -1,0 +1,152 @@
+"""
+Scarica gli ultimi 3 anni di alcuni indicatori di mercato e li salva in data.json:
+
+1. Rendimenti dei titoli di Stato a 10 anni: USA, Germania, Francia, Italia, Svizzera (mensili, OCSE via FRED)
+2. Spread investment grade USA (giornaliero, ICE BofA via FRED)
+3. Spread high yield USA ed Europa (giornalieri, ICE BofA via FRED)
+4. Inflazione attesa 5y5y USA (giornaliera, FRED) e aspettativa di lungo periodo
+   degli economisti per l'area euro (trimestrale, Survey of Professional Forecasters della BCE)
+
+Ogni giorno riscarica tutto da capo: le fonti conservano lo storico, quindi non serve accumularlo.
+Non serve installare niente: usa solo librerie già incluse in Python.
+"""
+
+import csv
+import io
+import json
+import os
+import time
+import urllib.request
+from datetime import date, datetime, timedelta, timezone
+
+ANNI = 3
+FILE_DATI = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data.json")
+
+# Codice FRED -> (nome da mostrare, moltiplicatore). Gli spread FRED sono in %, li mostriamo in punti base (x100).
+FRED = {
+    "IRLTLT01USM156N": ("USA", 1),
+    "IRLTLT01DEM156N": ("Germania", 1),
+    "IRLTLT01FRM156N": ("Francia", 1),
+    "IRLTLT01ITM156N": ("Italia", 1),
+    "IRLTLT01CHM156N": ("Svizzera", 1),
+    "BAMLC0A0CM": ("USA investment grade", 100),
+    "BAMLH0A0HYM2": ("USA high yield", 100),
+    "BAMLHE00EHYIOAS": ("Europa high yield", 100),
+    "T5YIFR": ("USA 5y5y breakeven", 1),
+}
+
+# Serie BCE: aspettativa media di inflazione di lungo periodo (circa 5 anni avanti) nella survey trimestrale
+BCE_SPF = "SPF/Q.U2.HICP.POINT.LT.Q.AVG"
+
+
+def scarica_testo(url, tentativi=4):
+    for n in range(tentativi):
+        try:
+            richiesta = urllib.request.Request(url, headers={"User-Agent": "osservatorio-mercati/1.0"})
+            with urllib.request.urlopen(richiesta, timeout=60) as risposta:
+                return risposta.read().decode("utf-8-sig")
+        except Exception as errore:
+            if n == tentativi - 1:
+                raise
+            print(f"  Tentativo {n + 1} fallito ({errore}), riprovo…")
+            time.sleep(10)
+
+
+def leggi_fred(codice, dal):
+    testo = scarica_testo(f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={codice}&cosd={dal}")
+    righe = list(csv.reader(io.StringIO(testo)))
+    punti = []
+    for riga in righe[1:]:            # la prima riga è l'intestazione
+        if len(riga) < 2 or riga[1] in ("", "."):
+            continue                  # giorni festivi o dato mancante
+        punti.append([riga[0], float(riga[1])])
+    return punti
+
+
+def trimestre_a_data(periodo):
+    """'2026-Q3' -> '2026-07-15' (la survey si svolge nel primo mese del trimestre)."""
+    anno, q = periodo.split("-Q")
+    mese = (int(q) - 1) * 3 + 1
+    return f"{anno}-{mese:02d}-15"
+
+
+def leggi_bce(serie, dal):
+    anno = dal[:4]
+    testo = scarica_testo(
+        f"https://data-api.ecb.europa.eu/service/data/{serie}?format=csvdata&startPeriod={anno}"
+    )
+    lettore = csv.DictReader(io.StringIO(testo))
+    punti = []
+    for riga in lettore:
+        valore = riga.get("OBS_VALUE", "")
+        if valore in ("", "NaN"):
+            continue
+        punti.append([trimestre_a_data(riga["TIME_PERIOD"]), float(valore)])
+    return sorted(p for p in punti if p[0] >= dal)
+
+
+def main():
+    oggi = datetime.now(timezone.utc).date()
+    dal = (oggi - timedelta(days=365 * ANNI + 1)).isoformat()
+
+    serie = {}
+    errori = []
+    for codice, (nome, molt) in FRED.items():
+        print(f"Scarico {nome} ({codice})…")
+        try:
+            punti = leggi_fred(codice, dal)
+            serie[codice] = {
+                "nome": nome,
+                "fonte": "FRED",
+                "punti": [[d, round(v * molt, 3)] for d, v in punti],
+            }
+        except Exception as errore:
+            errori.append(f"{codice}: {errore}")
+
+    print("Scarico la survey BCE…")
+    try:
+        serie["SPF_EA"] = {
+            "nome": "Area euro, attese degli economisti (BCE)",
+            "fonte": "BCE",
+            "punti": leggi_bce(BCE_SPF, dal),
+        }
+    except Exception as errore:
+        errori.append(f"BCE SPF: {errore}")
+
+    # Spread BTP-Bund in punti base, calcolato sui mesi in cui ci sono entrambi i dati
+    it = dict(serie.get("IRLTLT01ITM156N", {}).get("punti", []))
+    de = dict(serie.get("IRLTLT01DEM156N", {}).get("punti", []))
+    serie["BTP_BUND"] = {
+        "nome": "Spread BTP-Bund",
+        "fonte": "calcolato",
+        "punti": [[d, round((it[d] - de[d]) * 100, 1)] for d in sorted(it) if d in de],
+    }
+
+    # Se una serie non si è scaricata oggi, teniamo quella di ieri invece di perderla
+    if os.path.exists(FILE_DATI):
+        with open(FILE_DATI, encoding="utf-8") as f:
+            vecchio = json.load(f).get("serie", {})
+        for codice, dati in vecchio.items():
+            if codice not in serie or not serie[codice]["punti"]:
+                serie[codice] = dati
+
+    if not any(s["punti"] for s in serie.values()):
+        raise SystemExit("Nessun dato scaricato:\n" + "\n".join(errori))
+
+    with open(FILE_DATI, "w", encoding="utf-8") as f:
+        json.dump(
+            {"aggiornato": datetime.now(timezone.utc).isoformat(timespec="seconds"), "serie": serie},
+            f, ensure_ascii=False, separators=(",", ":"),
+        )
+
+    for codice, s in serie.items():
+        ultimo = s["punti"][-1] if s["punti"] else ("-", "-")
+        print(f"  {s['nome']}: {len(s['punti'])} punti, ultimo {ultimo[0]} = {ultimo[1]}")
+    if errori:
+        print("Attenzione, alcune serie non sono state aggiornate:")
+        for e in errori:
+            print("  " + e)
+
+
+if __name__ == "__main__":
+    main()

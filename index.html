@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Osservatorio Mercati</title>
+<meta name="description" content="Tassi a 10 anni, spread di credito e aspettative d'inflazione: gli ultimi 3 anni in quattro grafici, aggiornati ogni giorno.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --sfondo: #f4f3ef; --carta: #ffffff; --testo: #1a1a19; --secondario: #55544f; --tenue: #7a7973;
+    --linea: #e3e1da; --griglia: #eeece6;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      --sfondo: #111110; --carta: #1a1a19; --testo: #f0efec; --secondario: #c3c2b7; --tenue: #93928a;
+      --linea: #2e2e2b; --griglia: #262624;
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181;
+    }
+  }
+  :root[data-theme="dark"] {
+    --sfondo: #111110; --carta: #1a1a19; --testo: #f0efec; --secondario: #c3c2b7; --tenue: #93928a;
+    --linea: #2e2e2b; --griglia: #262624;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--sfondo); color: var(--testo); font: 15px/1.55 Inter, system-ui, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 44px 16px 64px; }
+  h1 { font-family: "Source Serif 4", Georgia, serif; font-size: clamp(1.9rem, 5.5vw, 2.6rem); line-height: 1.1; margin: 0 0 10px; }
+  .intro { color: var(--secondario); max-width: 64ch; margin: 0 0 6px; }
+  .agg { color: var(--tenue); font-size: .85rem; margin: 0 0 30px; }
+
+  .griglia-schede { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .scheda { background: var(--carta); border: 1px solid var(--linea); border-radius: 14px; padding: 20px 20px 16px; min-width: 0; }
+  .scheda.larga { grid-column: 1 / -1; }
+  .testa { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  .scheda h2 { font-family: "Source Serif 4", Georgia, serif; font-size: 1.3rem; margin: 0; }
+  .sottotitolo { color: var(--secondario); font-size: .85rem; margin: 2px 0 14px; }
+
+  .valori { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-bottom: 12px; }
+  .valore { font-size: .82rem; color: var(--secondario); display: flex; align-items: baseline; gap: 6px; }
+  .valore .punto { width: 10px; height: 10px; border-radius: 50%; display: inline-block; align-self: center; flex: none; }
+  .valore .punto.tratteggio { border-radius: 2px; height: 3px; }
+  .valore strong { color: var(--testo); font-size: 1rem; font-variant-numeric: tabular-nums; }
+  .valore .data { color: var(--tenue); font-size: .75rem; }
+
+  .grafico { position: relative; height: 280px; }
+  .larga .grafico { height: 320px; }
+  .nota { color: var(--tenue); font-size: .78rem; margin: 10px 0 0; }
+
+  .segmenti { display: inline-flex; background: var(--griglia); border-radius: 9px; padding: 3px; }
+  .segmenti button { border: 0; background: transparent; color: var(--secondario); font: inherit; font-size: .8rem; font-weight: 500; padding: 5px 11px; border-radius: 7px; cursor: pointer; }
+  .segmenti button[aria-pressed="true"] { background: var(--carta); color: var(--testo); box-shadow: 0 1px 2px rgba(0,0,0,.15); font-weight: 600; }
+
+  details { margin-top: 10px; font-size: .8rem; }
+  summary { color: var(--tenue); cursor: pointer; }
+  table { border-collapse: collapse; width: 100%; margin-top: 8px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--linea); }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--secondario); font-weight: 600; }
+
+  footer { color: var(--tenue); font-size: .82rem; border-top: 1px solid var(--linea); padding-top: 20px; margin-top: 36px; }
+  footer p { margin: 0 0 8px; }
+  footer a { color: inherit; }
+  @media (max-width: 760px) {
+    .griglia-schede { grid-template-columns: 1fr; }
+    .grafico, .larga .grafico { height: 250px; }
+    .scheda { padding: 16px 14px 14px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Osservatorio Mercati</h1>
+  <p class="intro">Tassi a 10 anni, spread di credito e aspettative d'inflazione negli ultimi tre anni. Passa il dito o il mouse sui grafici per leggere i valori di ogni giorno.</p>
+  <p class="agg" id="agg">Caricamento dei dati…</p>
+
+  <div class="griglia-schede">
+    <section class="scheda larga" id="s-tassi">
+      <div class="testa">
+        <div>
+          <h2>Titoli di Stato a 10 anni</h2>
+          <p class="sottotitolo" id="sub-tassi">Rendimento, media mensile, %</p>
+        </div>
+        <div class="segmenti" id="vista-tassi">
+          <button data-v="tassi" aria-pressed="true">Rendimenti</button>
+          <button data-v="btp" aria-pressed="false">Spread BTP-Bund</button>
+        </div>
+      </div>
+      <div class="valori"></div>
+      <div class="grafico"><canvas></canvas></div>
+      <p class="nota">Fonte: OCSE via FRED. I dati mensili sono pubblicati con circa due mesi di ritardo.</p>
+      <details><summary>Dati in tabella</summary><div class="tabella"></div></details>
+    </section>
+
+    <section class="scheda" id="s-ig">
+      <h2>Spread investment grade</h2>
+      <p class="sottotitolo">Obbligazioni societarie di qualità, sopra i titoli di Stato, punti base</p>
+      <div class="valori"></div>
+      <div class="grafico"><canvas></canvas></div>
+      <p class="nota">Fonte: ICE BofA via FRED, giornaliero. L'indice europeo equivalente non è pubblicato gratuitamente.</p>
+      <details><summary>Dati in tabella</summary><div class="tabella"></div></details>
+    </section>
+
+    <section class="scheda" id="s-hy">
+      <h2>Spread high yield</h2>
+      <p class="sottotitolo">Obbligazioni societarie più rischiose, sopra i titoli di Stato, punti base</p>
+      <div class="valori"></div>
+      <div class="grafico"><canvas></canvas></div>
+      <p class="nota">Fonte: ICE BofA via FRED, giornaliero.</p>
+      <details><summary>Dati in tabella</summary><div class="tabella"></div></details>
+    </section>
+
+    <section class="scheda larga" id="s-infl">
+      <h2>Aspettative d'inflazione a lungo termine</h2>
+      <p class="sottotitolo">Inflazione media attesa, %</p>
+      <div class="valori"></div>
+      <div class="grafico"><canvas></canvas></div>
+      <p class="nota">USA: inflazione media attesa tra 5 e 10 anni, ricavata dai prezzi dei titoli di Stato indicizzati (FRED, giornaliero). Area euro: non esiste un dato di mercato gratuito, quindi mostriamo l'inflazione attesa a lungo termine dagli economisti nella Survey of Professional Forecasters della BCE (trimestrale). Sono due misure diverse: confrontale con cautela.</p>
+      <details><summary>Dati in tabella</summary><div class="tabella"></div></details>
+    </section>
+  </div>
+
+  <footer>
+    <p>Dati da <a href="https://fred.stlouisfed.org">FRED</a> (Federal Reserve Bank of St. Louis) e dal <a href="https://data.ecb.europa.eu">Data Portal della BCE</a>, aggiornati automaticamente ogni mattina. Lo spread BTP-Bund è la differenza tra i rendimenti mensili di Italia e Germania.</p>
+    <p>Pagina informativa, non è un consiglio di investimento.</p>
+  </footer>
+</main>
+
+<script>
+const GRAFICI = {
+  tassi: {
+    scheda: "s-tassi", unita: "%", decimali: 2,
+    serie: [
+      ["IRLTLT01USM156N", "USA", "--s1"],
+      ["IRLTLT01DEM156N", "Germania", "--s2"],
+      ["IRLTLT01FRM156N", "Francia", "--s3"],
+      ["IRLTLT01ITM156N", "Italia", "--s4"],
+      ["IRLTLT01CHM156N", "Svizzera", "--s5"],
+    ],
+    mensile: true,
+  },
+  btp: {
+    scheda: "s-tassi", unita: " pb", decimali: 0,
+    serie: [["BTP_BUND", "BTP-Bund", "--s4"]],
+    mensile: true,
+  },
+  ig: { scheda: "s-ig", unita: " pb", decimali: 0, serie: [["BAMLC0A0CM", "USA", "--s1"]] },
+  hy: {
+    scheda: "s-hy", unita: " pb", decimali: 0,
+    serie: [["BAMLH0A0HYM2", "USA", "--s1"], ["BAMLHE00EHYIOAS", "Europa", "--s2"]],
+  },
+  infl: {
+    scheda: "s-infl", unita: "%", decimali: 2,
+    serie: [["T5YIFR", "USA, mercato (5y5y)", "--s1"], ["SPF_EA", "Area euro, economisti BCE", "--s2", "survey"]],
+  },
+};
+
+let dati = null;
+const istanze = {};
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const ts = d => Date.parse(d + "T00:00:00Z");
+const fmtNum = (v, dec) => v.toLocaleString("it-IT", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+const fmtData = (t, mensile) => new Date(t).toLocaleDateString("it-IT",
+  mensile ? { month: "short", year: "numeric", timeZone: "UTC" } : { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+
+function valoreVicino(punti, giorno) {
+  // ultimo valore disponibile prima o uguale a una data
+  let trovato = null;
+  for (const [d, v] of punti) { if (d <= giorno) trovato = [d, v]; else break; }
+  return trovato;
+}
+
+function disegna(chiave) {
+  const cfg = GRAFICI[chiave];
+  const scheda = document.getElementById(cfg.scheda);
+  const serie = cfg.serie.map(([codice, nome, colore, tipo]) => ({
+    nome, colore: css(colore), tipo, punti: dati.serie[codice]?.punti || [],
+  }));
+
+  // Valori più recenti = legenda
+  scheda.querySelector(".valori").innerHTML = serie.map(s => {
+    const ultimo = s.punti.at(-1);
+    const valore = ultimo ? `<strong>${fmtNum(ultimo[1], cfg.decimali)}${cfg.unita}</strong><span class="data">${fmtData(ts(ultimo[0]), cfg.mensile || s.tipo)}</span>` : "<strong>n.d.</strong>";
+    return `<span class="valore"><span class="punto${s.tipo ? " tratteggio" : ""}" style="background:${s.colore}"></span>${s.nome} ${valore}</span>`;
+  }).join("");
+
+  // Tabella: oggi, 1 anno fa, 3 anni fa
+  const oggi = new Date();
+  const fa = anni => { const d = new Date(oggi); d.setUTCFullYear(d.getUTCFullYear() - anni); return d.toISOString().slice(0, 10); };
+  const cella = (p, g) => { const v = valoreVicino(p, g); return v ? fmtNum(v[1], cfg.decimali) + cfg.unita : "–"; };
+  scheda.querySelector(".tabella").innerHTML = `<table><thead><tr><th>Serie</th><th>Ultimo</th><th>1 anno fa</th><th>3 anni fa</th></tr></thead><tbody>${
+    serie.map(s => `<tr><td>${s.nome}</td><td>${cella(s.punti, "9999")}</td><td>${cella(s.punti, fa(1))}</td><td>${cella(s.punti, fa(3))}</td></tr>`).join("")
+  }</tbody></table>`;
+
+  const testo = css("--secondario"), griglia = css("--griglia"), carta = css("--carta");
+  const tutte = serie.flatMap(s => s.punti.map(p => ts(p[0])));
+
+  if (istanze[cfg.scheda]) istanze[cfg.scheda].destroy();
+  istanze[cfg.scheda] = new Chart(scheda.querySelector("canvas"), {
+    type: "line",
+    data: {
+      datasets: serie.map(s => ({
+        label: s.nome,
+        data: s.punti.map(([d, v]) => ({ x: ts(d), y: v })),
+        borderColor: s.colore,
+        backgroundColor: s.colore,
+        borderWidth: 2,
+        borderDash: s.tipo ? [5, 4] : [],
+        stepped: s.tipo ? "before" : false,
+        pointRadius: s.tipo ? 4 : 0,
+        pointBorderColor: carta,
+        pointBorderWidth: s.tipo ? 2 : 0,
+        pointHoverRadius: 5,
+        pointHitRadius: 10,
+        tension: 0,
+      })),
+    },
+    options: {
+      maintainAspectRatio: false,
+      animation: false,
+      parsing: false,
+      interaction: { mode: "nearest", axis: "x", intersect: false },
+      scales: {
+        x: {
+          type: "linear", min: Math.min(...tutte), max: Math.max(...tutte),
+          grid: { display: false }, border: { color: griglia },
+          ticks: { color: testo, maxTicksLimit: 7, maxRotation: 0, callback: v => fmtData(v, true) },
+        },
+        y: {
+          grid: { color: griglia }, border: { display: false },
+          ticks: { color: testo, maxTicksLimit: 6, callback: v => fmtNum(v, cfg.unita === "%" ? 1 : 0) + cfg.unita },
+        },
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          mode: "x", intersect: false,
+          backgroundColor: carta, titleColor: css("--testo"), bodyColor: css("--testo"),
+          borderColor: css("--linea"), borderWidth: 1, padding: 10, boxPadding: 4, usePointStyle: true,
+          callbacks: {
+            title: items => items.length ? fmtData(items[0].parsed.x, cfg.mensile) : "",
+            label: c => ` ${c.dataset.label}: ${fmtNum(c.parsed.y, cfg.decimali)}${cfg.unita}`,
+          },
+        },
+      },
+    },
+    plugins: [{
+      id: "mirino",
+      afterDatasetsDraw(chart) {
+        const attivi = chart.tooltip?.getActiveElements?.() || [];
+        if (!attivi.length) return;
+        const x = attivi[0].element.x, { top, bottom } = chart.chartArea, ctx = chart.ctx;
+        ctx.save(); ctx.strokeStyle = css("--tenue"); ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke(); ctx.restore();
+      },
+    }],
+  });
+}
+
+let vistaTassi = "tassi";
+function disegnaTutto() {
+  disegna(vistaTassi);
+  document.getElementById("sub-tassi").textContent =
+    vistaTassi === "tassi" ? "Rendimento, media mensile, %" : "Differenza di rendimento tra Italia e Germania, media mensile, punti base";
+  ["ig", "hy", "infl"].forEach(disegna);
+}
+
+document.getElementById("vista-tassi").addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (!b || !dati) return;
+  vistaTassi = b.dataset.v;
+  for (const x of e.currentTarget.children) x.setAttribute("aria-pressed", x === b);
+  disegnaTutto();
+});
+
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => dati && disegnaTutto());
+
+fetch("data.json?" + Date.now())
+  .then(r => r.json())
+  .then(d => {
+    dati = d;
+    document.getElementById("agg").textContent = d.aggiornato
+      ? "Ultimo aggiornamento: " + new Date(d.aggiornato).toLocaleString("it-IT", { dateStyle: "long", timeStyle: "short" })
+      : "In attesa del primo aggiornamento.";
+    if (d.serie) disegnaTutto();
+  })
+  .catch(() => { document.getElementById("agg").textContent = "Non riesco a caricare i dati. Riprova tra qualche minuto."; });
+</script>
+</body>
+</html>
